@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/Components/Button";
 import { useSession } from "@/Hooks/useSession";
@@ -100,42 +100,56 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user, role, isLoading, isUnauthenticated, signOut } = useSession();
 
-  // The refresh interceptor in httpClient also redirects here on a dead session; this
-  // effect covers a cold load on a deep link. Must not run during render.
+  // Defer rendering entirely to the client — session state is never available
+  // on the server, so rendering session-dependent JSX during SSR causes a
+  // hydration mismatch (server: nothing, client: loading spinner or redirect).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
+    if (!mounted) return;
     if (isUnauthenticated) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
-  }, [isUnauthenticated, pathname, router]);
+  }, [isUnauthenticated, mounted, pathname, router]);
+
+  // Nothing on the server — avoids hydration mismatch.
+  if (!mounted) return null;
 
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas">
-        <p className="text-sm text-ink-muted">Checking your session…</p>
+        <div className="flex flex-col items-center gap-4">
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500 text-white shadow-lg shadow-brand-500/30">
+            <Ambulance className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <p className="text-sm text-ink-muted">Checking your session…</p>
+        </div>
       </div>
     );
   }
 
-  if (isUnauthenticated) return null;
-
-  if (!user || !role) return null;
+  if (isUnauthenticated || !user || !role) return null;
 
   const items = NAV.filter((item) => item.roles.includes(role));
 
   return (
-    <div className="min-h-dvh bg-canvas lg:grid lg:grid-cols-[16rem_1fr]">
+    <div className="min-h-dvh bg-canvas lg:grid lg:grid-cols-[15rem_1fr]">
+      {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
       <aside className="hidden border-r border-line bg-surface lg:flex lg:flex-col">
-        <div className="flex items-center gap-2.5 border-b border-line px-5 py-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-800 text-ink-invert">
+        {/* Brand */}
+        <div className="flex items-center gap-3 border-b border-line px-5 py-4">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-white shadow-md shadow-brand-500/25">
             <Ambulance className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
-            <p className="text-display text-base leading-none text-ink">MedRush</p>
-            <p className="mt-1 text-xs text-ink-subtle">Dispatch console</p>
+            <p className="text-sm font-bold tracking-tight text-ink">MedRush</p>
+            <p className="mt-0.5 text-[11px] text-ink-subtle">Dispatch console</p>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3 scroll-slim" aria-label="Main">
+        {/* Nav items */}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4 scroll-slim" aria-label="Main">
           {items.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
@@ -144,22 +158,28 @@ export function AppShell({ children }: { children: ReactNode }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                   active
-                    ? "bg-brand-50 text-brand-800"
+                    ? "bg-brand-50 text-brand-600 shadow-sm ring-1 ring-brand-100"
                     : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
                 )}
               >
-                {item.icon}
+                <span className={cn("shrink-0", active ? "text-brand-500" : "")}>
+                  {item.icon}
+                </span>
                 {item.label}
+                {active && (
+                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-500" />
+                )}
               </Link>
             );
           })}
         </nav>
 
+        {/* User footer */}
         <div className="border-t border-line p-3">
-          <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
+          <div className="mb-1 flex items-center gap-3 rounded-lg px-2 py-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-sm font-bold text-white shadow-sm">
               {initialsOf(user.name)}
             </span>
             <div className="min-w-0 flex-1">
@@ -170,11 +190,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Button
             variant="ghost"
             size="sm"
-            className="mt-1 w-full justify-start"
+            className="mt-0.5 w-full justify-start text-ink-muted hover:text-critical"
             icon={<LogOut className="h-4 w-4" aria-hidden="true" />}
             onClick={() => {
               signOut();
-              router.replace("/login");
+              router.replace("/");
             }}
           >
             Sign out
@@ -182,22 +202,24 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
+      {/* ── MAIN CONTENT ─────────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-col">
-        {/* Compact bar so navigation is not desktop-only. */}
+        {/* Mobile top bar */}
         <header className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 lg:hidden">
-          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-800 text-ink-invert">
+          <span className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-white shadow-sm shadow-brand-500/25">
               <Ambulance className="h-4 w-4" aria-hidden="true" />
             </span>
-            MedRush
+            <span className="text-sm font-bold tracking-tight text-ink">MedRush</span>
           </span>
           <span className="truncate text-xs text-ink-subtle">
             {user.name} · {ROLE_LABEL[role]}
           </span>
         </header>
 
+        {/* Mobile nav tabs */}
         <nav
-          className="flex gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-2 scroll-slim lg:hidden"
+          className="flex gap-1 overflow-x-auto border-b border-line bg-surface px-3 py-2 scroll-slim lg:hidden"
           aria-label="Main"
         >
           {items.map((item) => {
@@ -208,8 +230,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium",
-                  active ? "bg-brand-800 text-ink-invert" : "text-ink-muted hover:bg-surface-sunken",
+                  "shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  active
+                    ? "bg-brand-500 text-white shadow-sm shadow-brand-500/25"
+                    : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
                 )}
               >
                 {item.label}

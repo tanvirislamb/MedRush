@@ -10,11 +10,11 @@ type Size = "sm" | "md";
 
 const VARIANT_CLASS: Record<Variant, string> = {
   primary:
-    "bg-brand-800 text-ink-invert hover:bg-brand-700 active:bg-brand-900 disabled:hover:bg-brand-800",
+    "bg-brand-500 text-white shadow-sm shadow-brand-500/20 hover:bg-brand-600 hover:shadow-md hover:shadow-brand-500/25 active:bg-brand-700 disabled:hover:bg-brand-500",
   secondary:
-    "bg-surface text-ink hairline-top border border-line hover:bg-surface-sunken active:bg-surface-sunken",
+    "bg-surface text-ink border border-line hover:bg-surface-sunken hover:border-brand-200 active:bg-surface-sunken",
   ghost: "text-ink-muted hover:bg-surface-sunken hover:text-ink",
-  danger: "bg-critical text-ink-invert hover:bg-critical/90 active:bg-critical",
+  danger: "bg-critical text-white shadow-sm hover:bg-critical/90 active:bg-critical",
 };
 
 const SIZE_CLASS: Record<Size, string> = {

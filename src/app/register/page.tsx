@@ -61,89 +61,113 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-8 bg-canvas px-4 py-12">
-      <Link href="/" className="flex items-center gap-2.5">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-800 text-ink-invert">
-          <Ambulance className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <span className="text-display text-xl text-ink">MedRush</span>
-      </Link>
-
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1.5 text-center">
-          <h1 className="text-display text-2xl text-ink">Create your account</h1>
-          <p className="text-sm text-ink-muted">Join the emergency dispatch network.</p>
-        </div>
-
-        <form onSubmit={onSubmit} className="panel space-y-4 p-6" noValidate>
-          {error ? <FormBanner>{error}</FormBanner> : null}
-
-          <Field
-            label="Full name"
-            name="name"
-            autoComplete="name"
-            placeholder="Ada Lovelace"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            error={fieldErrors.name}
-          />
-          <Field
-            label="Email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            error={fieldErrors.email}
-          />
-          <Field
-            label="Phone"
-            name="phone"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+880 1700 000000"
-            hint="Optional — helps dispatchers reach you."
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            error={fieldErrors.phone}
-          />
-          <Field
-            label="Password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="At least 6 characters"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            error={fieldErrors.password}
-          />
-          <Select
-            label="I am a"
-            name="role"
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role as "PATIENT" | "DISPATCHER")}
-            hint={ROLE_HINT[role]}
-          >
-            <option value="PATIENT">Patient</option>
-            <option value="DISPATCHER">Dispatcher</option>
-          </Select>
-
-          <Button type="submit" className="w-full" isLoading={isSubmitting}>
-            Create account
-          </Button>
-
-          <p className="text-center text-sm text-ink-muted">
-            Already registered?{" "}
-            <Link href="/login" className="font-semibold text-brand-700 hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </form>
+    <div className="relative flex min-h-dvh flex-col bg-canvas">
+      {/* Background gradient */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-brand-100 opacity-50 blur-[120px]" />
       </div>
-    </main>
+
+      {/* Top nav */}
+      <header className="relative border-b border-line/60 bg-surface/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-white shadow-sm shadow-brand-500/25 transition-transform group-hover:scale-105">
+              <Ambulance className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="text-sm font-bold tracking-tight text-ink">MedRush</span>
+          </Link>
+          <Link
+            href="/login"
+            className="text-sm font-medium text-ink-muted transition-colors hover:text-ink"
+          >
+            Already have an account? Sign in →
+          </Link>
+        </div>
+      </header>
+
+      {/* Form */}
+      <main className="relative flex flex-1 flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
+          {/* Card */}
+          <div className="rounded-2xl border border-line bg-surface p-8 shadow-xl shadow-ink/5">
+            <div className="mb-7 space-y-1 text-center">
+              <h1 className="text-display text-2xl font-bold text-ink">Create your account</h1>
+              <p className="text-sm text-ink-muted">Join the MedRush emergency dispatch network.</p>
+            </div>
+
+            <form onSubmit={onSubmit} className="space-y-4" noValidate>
+              {error ? <FormBanner>{error}</FormBanner> : null}
+
+              <Field
+                label="Full name"
+                name="name"
+                autoComplete="name"
+                placeholder="Ada Lovelace"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                error={fieldErrors.name}
+              />
+              <Field
+                label="Email address"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                error={fieldErrors.email}
+              />
+              <Field
+                label="Phone"
+                name="phone"
+                type="tel"
+                autoComplete="tel"
+                placeholder="+880 1700 000000"
+                hint="Optional — helps dispatchers reach you."
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                error={fieldErrors.phone}
+              />
+              <Field
+                label="Password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="At least 6 characters"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                error={fieldErrors.password}
+              />
+              <Select
+                label="I am a"
+                name="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value as Role as "PATIENT" | "DISPATCHER")}
+                hint={ROLE_HINT[role]}
+              >
+                <option value="PATIENT">Patient</option>
+                <option value="DISPATCHER">Dispatcher</option>
+              </Select>
+
+              <div className="pt-1">
+                <Button type="submit" className="w-full" isLoading={isSubmitting}>
+                  Create account
+                </Button>
+              </div>
+            </form>
+
+            <p className="mt-6 text-center text-sm text-ink-muted">
+              Already registered?{" "}
+              <Link href="/login" className="font-semibold text-brand-500 hover:text-brand-600 hover:underline transition-colors">
+                Sign in
+              </Link>
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
