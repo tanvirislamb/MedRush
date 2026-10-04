@@ -1,29 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  /* Deep wine is the MedRush brand colour. */
-  --color-brand-50: #f7ecee;
-  --color-brand-100: #ecd8dc;
-  --color-brand-200: #d8b0b7;
-  --color-brand-300: #c08591;
-  --color-brand-400: #9f5b68;
-  --color-brand-500: #7d3a47;
-  --color-brand-600: #62222e;
-  --color-brand-700: #4c1a24;
-  --color-brand-800: #3a1519;
-  --color-brand-900: #2b0f13;
-  --color-brand-950: #1c090c;
+  /* Blue-indigo brand colour — primary: #5B7CFA */
+  --color-brand-50: #eef1ff;
+  --color-brand-100: #e0e5ff;
+  --color-brand-200: #c7cfff;
+  --color-brand-300: #a4b0fd;
+  --color-brand-400: #8090fb;
+  --color-brand-500: #5B7CFA;
+  --color-brand-600: #3f5ee8;
+  --color-brand-700: #3049cc;
+  --color-brand-800: #2a3da4;
+  --color-brand-900: #263882;
+  --color-brand-950: #17214d;
 
-  --color-canvas: #f7f4f4;
+  --color-canvas: #f8f9fc;
   --color-surface: #ffffff;
-  --color-surface-sunken: #f2eded;
-  --color-line: #e6dfe0;
-  --color-line-strong: #d3c7c9;
+  --color-surface-sunken: #f1f3f8;
+  --color-line: #e4e7ef;
+  --color-line-strong: #c9cedb;
 
-  --color-ink: #241a1b;
-  --color-ink-muted: #6b5c5e;
-  --color-ink-subtle: #9a8b8d;
-  --color-ink-invert: #fdfbfb;
+  --color-ink: #1a1d2e;
+  --color-ink-muted: #5c6070;
+  --color-ink-subtle: #8b909f;
+  --color-ink-invert: #ffffff;
 
   /* Flat status colours - no gradients anywhere in this system. */
   --color-critical: #9f1239;
@@ -82,8 +82,8 @@
   border: 1px solid var(--color-line);
   border-radius: 1rem;
   box-shadow:
-    0 1px 2px rgb(36 26 27 / 0.04),
-    0 8px 24px -12px rgb(36 26 27 / 0.14);
+    0 1px 2px rgb(26 29 46 / 0.04),
+    0 8px 24px -12px rgb(26 29 46 / 0.12);
 }
 
 @utility hairline-top {
@@ -109,13 +109,13 @@
 
 @keyframes medrush-pulse-ring {
   0% {
-    box-shadow: 0 0 0 0 rgb(58 21 25 / 0.35);
+    box-shadow: 0 0 0 0 rgb(91 124 250 / 0.35);
   }
   70% {
-    box-shadow: 0 0 0 12px rgb(58 21 25 / 0);
+    box-shadow: 0 0 0 12px rgb(91 124 250 / 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgb(58 21 25 / 0);
+    box-shadow: 0 0 0 0 rgb(91 124 250 / 0);
   }
 }
 
