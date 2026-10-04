@@ -79,11 +79,11 @@ let refreshInFlight: Promise<void> | null = null;
 
 function sendToLogin(): void {
   if (typeof window === "undefined") return;
-  if (window.location.pathname === "/login") return;
+  // Already on a public page — don't loop.
+  if (["/", "/login", "/register"].includes(window.location.pathname)) return;
   const next = encodeURIComponent(window.location.pathname + window.location.search);
-  // A full navigation is deliberate. router.push() would keep the stale React Query
-  // session cache alive, so AppShell would still consider the user signed in and bounce
-  // them straight back. Reloading discards the cache and re-bootstraps from /auth/me.
+  // Full navigation is deliberate: discards the stale React Query cache so
+  // AppShell re-bootstraps from /auth/me rather than bouncing back immediately.
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.assign(`/login?next=${next}`);
 }

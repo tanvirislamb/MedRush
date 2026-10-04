@@ -41,12 +41,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
 
   const signOut = useCallback(() => {
-    // The backend exposes no logout endpoint and the tokens are httpOnly cookies the
-    // client cannot clear, so signing out is necessarily local: drop the cached user
-    // and send the browser to /login. The stale cookie then simply fails /auth/me and
-    // the refresh interceptor takes over from there.
-    queryClient.setQueryData(["session"], null);
-    queryClient.clear();
+    // Run async work in an IIFE so the callback stays synchronous for callers.
+    void (async () => {
+      // 1. Hit the local Next.js route that sets Set-Cookie: Max-Age=0 on both
+      //    httpOnly cookies — this actually deletes them from the browser.
+      await authService.logout();
+      // 2. Wipe all cached query data.
+      queryClient.clear();
+      // 3. Hard-navigate to the landing page. A full page load is required so the
+      //    new QueryClient starts fresh and /auth/me returns 401 (no cookie).
+      window.location.assign("/");
+    })();
   }, [queryClient]);
 
   const refreshUser = useCallback(async () => {

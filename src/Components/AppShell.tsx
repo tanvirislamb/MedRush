@@ -192,10 +192,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             size="sm"
             className="mt-0.5 w-full justify-start text-ink-muted hover:text-critical"
             icon={<LogOut className="h-4 w-4" aria-hidden="true" />}
-            onClick={() => {
-              signOut();
-              router.replace("/");
-            }}
+            onClick={() => signOut()}
           >
             Sign out
           </Button>
