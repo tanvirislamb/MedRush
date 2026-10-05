@@ -1,19 +1,65 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Ambulance, CreditCard, Route, Siren, Users } from "lucide-react";
+import {
+  Ambulance,
+  Building2,
+  ChevronRight,
+  CreditCard,
+  Route,
+  Siren,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
+import { buttonClass } from "@/Components/Button";
 import { EmptyState, ErrorState, LoadingState, Timestamp } from "@/Components/Data";
-import { PageHeader, Panel, PanelHeader, StatCard } from "@/Components/Layout";
+import {
+  KeyValue,
+  MetricGrid,
+  PageHeader,
+  Panel,
+  PanelHeader,
+  ProgressBar,
+  StatCard,
+} from "@/Components/Layout";
 import { StatusTag } from "@/Components/StatusTag";
 import { TripProgress } from "@/Components/TripProgress";
 import { useSession } from "@/Hooks/useSession";
 import { administrationService } from "@/Services/administrationService";
+import { crewService } from "@/Services/crewService";
 import { emergencyRequestService } from "@/Services/emergencyRequestService";
+import { fleetService } from "@/Services/fleetService";
 import { paymentService } from "@/Services/paymentService";
 import { tripService } from "@/Services/tripService";
-import { PRIORITY, REQUEST_STATUS, TRIP_STATUS } from "@/Utils/presentation";
+import { formatCurrency } from "@/Utils/format";
+import { PRIORITY, PRIORITY_ORDER, REQUEST_STATUS, TRIP_STATUS } from "@/Utils/presentation";
+import type { TripStatus } from "@/Types/domain";
+
+/**
+ * Anything past "assigned a crew" but not yet finished. Mirrors the backend
+ * state machine, so COMPLETED and CANCELLED trips are excluded.
+ */
+const IN_PROGRESS: TripStatus[] = [
+  "DISPATCHED",
+  "EN_ROUTE",
+  "AT_PICKUP",
+  "TRANSPORTING",
+  "ARRIVED",
+];
+
+/* ── Query keys ───────────────────────────────────────────────────────────────
+ * Each key is a child of a root the mutating screens already invalidate
+ * (["requests"], ["trips"], ["fleet"], ["crew"], ["payments"]), so a dispatch or
+ * status change made elsewhere is reflected here without a manual refetch.
+ * The trailing "overview" keeps them distinct from the paged list screens,
+ * which pass page/filter values in the key.
+ * --------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
+/* Role switch                                                                 */
+/* -------------------------------------------------------------------------- */
 
 export default function DashboardPage() {
   const { user, role } = useSession();
@@ -23,28 +69,45 @@ export default function DashboardPage() {
   return <PatientOverview name={user?.name ?? ""} />;
 }
 
+function ViewAll({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-0.5 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
+    >
+      {children}
+      <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+    </Link>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Patient                                                                    */
 /* -------------------------------------------------------------------------- */
 
 function PatientOverview({ name }: { name: string }) {
   const requests = useQuery({
-    queryKey: ["requests", "mine"],
+    queryKey: ["requests", "mine", "overview"],
     queryFn: () => emergencyRequestService.listMine({ page: 1, limit: 5 }),
   });
+  // Counted server-side rather than filtered from the five rows above, so the
+  // figure stays honest once a patient has more requests than one page.
+  const pending = useQuery({
+    queryKey: ["requests", "mine", "overview", "pending"],
+    queryFn: () => emergencyRequestService.listMine({ page: 1, limit: 1, status: "PENDING" }),
+  });
   const trips = useQuery({
-    queryKey: ["trips", "mine"],
-    queryFn: () => tripService.listForViewer({ page: 1, limit: 5 }),
+    queryKey: ["trips", "viewer", "overview"],
+    queryFn: () => tripService.listForViewer({ page: 1, limit: 6 }),
   });
   const payments = useQuery({ queryKey: ["payments"], queryFn: () => paymentService.list() });
 
-  const activeTrip = trips.data?.data.find((trip) =>
-    ["DISPATCHED", "EN_ROUTE", "AT_PICKUP", "TRANSPORTING", "ARRIVED"].includes(trip.status),
-  );
-  const openRequests = requests.data?.data.filter((r) => r.status === "PENDING").length ?? 0;
-  const outstanding = payments.data
-    ?.filter((payment) => payment.status !== "COMPLETED")
-    .reduce((total, payment) => total + payment.amount, 0);
+  const activeTrip = trips.data?.data.find((trip) => IN_PROGRESS.includes(trip.status));
+  const openRequests = pending.data?.meta.total ?? 0;
+  const outstanding =
+    payments.data
+      ?.filter((payment) => payment.status !== "COMPLETED")
+      .reduce((total, payment) => total + payment.amount, 0) ?? 0;
 
   return (
     <>
@@ -53,10 +116,7 @@ function PatientOverview({ name }: { name: string }) {
         title={`Hello, ${name.split(" ")[0]}`}
         description="Request an ambulance, then follow the crew all the way to the hospital."
         actions={
-          <Link
-            href="/requests"
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-800 px-4 text-sm font-semibold text-ink-invert transition-colors hover:bg-brand-700"
-          >
+          <Link href="/requests" className={buttonClass("primary")}>
             <Siren className="h-4 w-4" aria-hidden="true" />
             New request
           </Link>
@@ -64,54 +124,64 @@ function PatientOverview({ name }: { name: string }) {
       />
 
       {activeTrip ? (
-        <Panel raised className="mb-6 p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-brand-700">
-                Active trip
-              </p>
-              <p className="mt-1 text-lg font-semibold text-ink">
+        <Panel className="mb-6">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-semibold tracking-tight text-ink">Trip in progress</h2>
+                <StatusTag presentation={TRIP_STATUS[activeTrip.status]} pulse />
+              </div>
+              <p className="mt-1.5 text-[13px] text-ink-muted">
                 {activeTrip.ambulance?.vehicleNumber ?? "Crew assigned"}
                 {activeTrip.driver?.name ? ` · ${activeTrip.driver.name}` : ""}
+                {activeTrip.hospital?.name ? ` · ${activeTrip.hospital.name}` : ""}
               </p>
             </div>
-            <StatusTag presentation={TRIP_STATUS[activeTrip.status]} pulse />
+            <Link href={`/trips/${activeTrip.id}`} className={buttonClass("secondary", "sm")}>
+              View details
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
           </div>
-          <TripProgress status={activeTrip.status} />
-          <Link
-            href={`/trips/${activeTrip.id}`}
-            className="mt-5 inline-block text-sm font-semibold text-brand-700 hover:underline"
-          >
-            View trip details
-          </Link>
+          <div className="px-5 py-5">
+            <TripProgress status={activeTrip.status} />
+          </div>
         </Panel>
       ) : null}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Open requests" value={openRequests} tone={openRequests > 0 ? "warning" : "neutral"} />
-        <StatCard label="Trips" value={trips.data?.meta.total ?? 0} tone="brand" />
+      <MetricGrid columns={3} className="mb-6">
+        <StatCard
+          label="Awaiting crew"
+          value={pending.isLoading ? "—" : openRequests}
+          tone={openRequests > 0 ? "warning" : "neutral"}
+          icon={<Siren className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Trips"
+          value={trips.isLoading ? "—" : (trips.data?.meta.total ?? 0)}
+          icon={<Route className="h-4 w-4" />}
+        />
         <StatCard
           label="Outstanding"
-          value={outstanding ? `$${outstanding.toFixed(2)}` : "$0.00"}
-          tone={outstanding ? "critical" : "success"}
+          value={payments.isLoading ? "—" : formatCurrency(outstanding)}
+          tone={outstanding > 0 ? "critical" : "neutral"}
           hint="Unpaid trip fares"
+          icon={<CreditCard className="h-4 w-4" />}
         />
-      </div>
+      </MetricGrid>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
           <PanelHeader
-            title="My recent requests"
-            actions={
-              <Link href="/requests" className="text-sm font-semibold text-brand-700 hover:underline">
-                View all
-              </Link>
-            }
+            title="Recent requests"
+            actions={<ViewAll href="/requests">View all</ViewAll>}
           />
           {requests.isLoading ? (
             <LoadingState />
           ) : requests.isError ? (
-            <ErrorState message={(requests.error as Error).message} onRetry={() => requests.refetch()} />
+            <ErrorState
+              message={(requests.error as Error).message}
+              onRetry={() => requests.refetch()}
+            />
           ) : requests.data?.data.length === 0 ? (
             <EmptyState
               title="No requests yet"
@@ -121,14 +191,14 @@ function PatientOverview({ name }: { name: string }) {
           ) : (
             <ul className="divide-y divide-line">
               {requests.data?.data.map((request) => (
-                <li key={request.id} className="flex items-start justify-between gap-3 px-5 py-3.5">
-                  <div className="min-w-0">
+                <li key={request.id} className="flex items-center gap-4 px-5 py-3">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">{request.pickupLocation}</p>
                     <p className="mt-0.5 text-xs text-ink-subtle">
                       <Timestamp value={request.createdAt} />
                     </p>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <div className="flex shrink-0 items-center gap-1.5">
                     <StatusTag presentation={REQUEST_STATUS[request.status]} />
                     <StatusTag presentation={PRIORITY[request.priority]} />
                   </div>
@@ -139,18 +209,14 @@ function PatientOverview({ name }: { name: string }) {
         </Panel>
 
         <Panel>
-          <PanelHeader
-            title="My recent trips"
-            actions={
-              <Link href="/trips" className="text-sm font-semibold text-brand-700 hover:underline">
-                View all
-              </Link>
-            }
-          />
+          <PanelHeader title="Recent trips" actions={<ViewAll href="/trips">View all</ViewAll>} />
           {trips.isLoading ? (
             <LoadingState />
           ) : trips.isError ? (
-            <ErrorState message={(trips.error as Error).message} onRetry={() => trips.refetch()} />
+            <ErrorState
+              message={(trips.error as Error).message}
+              onRetry={() => trips.refetch()}
+            />
           ) : trips.data?.data.length === 0 ? (
             <EmptyState
               title="No trips yet"
@@ -160,15 +226,16 @@ function PatientOverview({ name }: { name: string }) {
           ) : (
             <ul className="divide-y divide-line">
               {trips.data?.data.map((trip) => (
-                <li key={trip.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
-                  <div className="min-w-0">
+                <li key={trip.id} className="flex items-center gap-4 px-5 py-3">
+                  <div className="min-w-0 flex-1">
                     <Link
                       href={`/trips/${trip.id}`}
-                      className="truncate text-sm font-medium text-ink hover:underline"
+                      className="truncate text-sm font-medium text-ink transition-colors hover:text-brand-700"
                     >
                       {trip.request?.pickupLocation ?? "Trip"}
                     </Link>
                     <p className="mt-0.5 text-xs text-ink-subtle">
+                      {trip.ambulance?.vehicleNumber ?? "Crew assigned"} ·{" "}
                       <Timestamp value={trip.createdAt} />
                     </p>
                   </div>
@@ -189,11 +256,25 @@ function PatientOverview({ name }: { name: string }) {
 
 function DispatcherOverview({ name }: { name: string }) {
   const queue = useQuery({
-    queryKey: ["requests", "queue"],
+    queryKey: ["requests", "queue", "overview"],
     queryFn: () => emergencyRequestService.search({ page: 1, limit: 6, status: "PENDING" }),
+  });
+  // limit:1 — only meta.total is read, and the backend counts before it slices.
+  const ambulances = useQuery({
+    queryKey: ["fleet", "available", "overview"],
+    queryFn: () => fleetService.list({ availability: "AVAILABLE", limit: 1 }),
+  });
+  const drivers = useQuery({
+    queryKey: ["crew", "available", "overview"],
+    queryFn: () => crewService.list({ availability: "AVAILABLE", limit: 1 }),
+  });
+  const trips = useQuery({
+    queryKey: ["trips", "viewer", "overview"],
+    queryFn: () => tripService.listForViewer({ page: 1, limit: 6 }),
   });
 
   const pending = queue.data?.meta.total ?? 0;
+  const activeTrips = trips.data?.data.filter((trip) => IN_PROGRESS.includes(trip.status)) ?? [];
 
   return (
     <>
@@ -202,14 +283,11 @@ function DispatcherOverview({ name }: { name: string }) {
         title={`On shift, ${name.split(" ")[0]}`}
         description="Work the incoming queue, then assign an ambulance and driver to each request."
         actions={
-          <Link
-            href="/dispatch"
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-800 px-4 text-sm font-semibold text-ink-invert transition-colors hover:bg-brand-700"
-          >
+          <Link href="/dispatch" className={buttonClass("primary")}>
             <Siren className="h-4 w-4" aria-hidden="true" />
             Open queue
             {pending > 0 ? (
-              <span className="rounded-full bg-ink-invert px-1.5 text-xs font-bold text-brand-800">
+              <span className="rounded-full bg-ink-invert/20 px-1.5 text-xs font-semibold tabular-nums">
                 {pending}
               </span>
             ) : null}
@@ -217,37 +295,113 @@ function DispatcherOverview({ name }: { name: string }) {
         }
       />
 
-      <Panel>
-        <PanelHeader
-          title="Awaiting dispatch"
-          description="Oldest requests first — critical cases are shown by priority."
+      <MetricGrid columns={3} className="mb-6">
+        <StatCard
+          label="Awaiting dispatch"
+          value={queue.isLoading ? "—" : pending}
+          tone={pending > 0 ? "warning" : "neutral"}
+          icon={<Siren className="h-4 w-4" />}
         />
-        {queue.isLoading ? (
-          <LoadingState />
-        ) : queue.isError ? (
-          <ErrorState message={(queue.error as Error).message} onRetry={() => queue.refetch()} />
-        ) : queue.data?.data.length === 0 ? (
-          <EmptyState
-            title="Queue is clear"
-            description="No requests are waiting for a crew right now."
-            icon={<Siren className="h-5 w-5" aria-hidden="true" />}
+        <StatCard
+          label="Ambulances free"
+          value={ambulances.isLoading ? "—" : (ambulances.data?.meta.total ?? 0)}
+          icon={<Ambulance className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Drivers free"
+          value={drivers.isLoading ? "—" : (drivers.data?.meta.total ?? 0)}
+          icon={<Users className="h-4 w-4" />}
+        />
+      </MetricGrid>
+
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Panel className="lg:col-span-3">
+          <PanelHeader
+            title="Awaiting dispatch"
+            description="Oldest requests first — critical cases are shown by priority."
+            actions={<ViewAll href="/dispatch">Open queue</ViewAll>}
           />
-        ) : (
-          <ul className="divide-y divide-line">
-            {queue.data?.data.map((request) => (
-              <li key={request.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink">{request.pickupLocation}</p>
-                  <p className="mt-0.5 text-xs text-ink-subtle">
-                    {request.patientName} · {request.contact} · <Timestamp value={request.createdAt} />
-                  </p>
-                </div>
-                <StatusTag presentation={PRIORITY[request.priority]} pulse={request.priority === "CRITICAL"} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+          {queue.isLoading ? (
+            <LoadingState />
+          ) : queue.isError ? (
+            <ErrorState
+              message={(queue.error as Error).message}
+              onRetry={() => queue.refetch()}
+            />
+          ) : queue.data?.data.length === 0 ? (
+            <EmptyState
+              title="Queue is clear"
+              description="No requests are waiting for a crew right now."
+              icon={<Siren className="h-5 w-5" aria-hidden="true" />}
+            />
+          ) : (
+            <ul className="divide-y divide-line">
+              {queue.data?.data.map((request) => (
+                <li key={request.id} className="flex items-center gap-4 px-5 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-ink">{request.patientName}</p>
+                      <StatusTag
+                        presentation={PRIORITY[request.priority]}
+                        pulse={request.priority === "CRITICAL"}
+                      />
+                    </div>
+                    <p className="mt-1 truncate text-xs text-ink-subtle">
+                      {request.pickupLocation} · {request.contact} ·{" "}
+                      <Timestamp value={request.createdAt} />
+                    </p>
+                  </div>
+                  <Link
+                    href="/dispatch"
+                    className={buttonClass("secondary", "sm", "shrink-0")}
+                    aria-label={`Dispatch an ambulance for ${request.patientName}`}
+                  >
+                    Dispatch
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel className="lg:col-span-2">
+          <PanelHeader title="Trips in progress" actions={<ViewAll href="/trips">View all</ViewAll>} />
+          {trips.isLoading ? (
+            <LoadingState />
+          ) : trips.isError ? (
+            <ErrorState
+              message={(trips.error as Error).message}
+              onRetry={() => trips.refetch()}
+            />
+          ) : activeTrips.length === 0 ? (
+            <EmptyState
+              title="Nothing on the road"
+              description="Dispatch a crew and active trips will appear here."
+              icon={<Route className="h-5 w-5" aria-hidden="true" />}
+            />
+          ) : (
+            <ul className="divide-y divide-line">
+              {activeTrips.map((trip) => (
+                <li key={trip.id} className="flex items-center gap-4 px-5 py-3">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/trips/${trip.id}`}
+                      className="truncate text-sm font-medium text-ink transition-colors hover:text-brand-700"
+                    >
+                      {trip.ambulance?.vehicleNumber ?? "Crew assigned"}
+                    </Link>
+                    <p className="mt-0.5 truncate text-xs text-ink-subtle">
+                      {trip.request?.pickupLocation ?? "—"}
+                      {trip.driver?.name ? ` · ${trip.driver.name}` : ""}
+                    </p>
+                  </div>
+                  <StatusTag presentation={TRIP_STATUS[trip.status]} pulse />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
     </>
   );
 }
@@ -259,49 +413,107 @@ function DispatcherOverview({ name }: { name: string }) {
 function AdminOverview() {
   const stats = useQuery({ queryKey: ["admin", "stats"], queryFn: () => administrationService.stats() });
 
-  if (stats.isLoading) return <LoadingState label="Loading statistics…" />;
+  if (stats.isLoading) {
+    return (
+      <>
+        <PageHeader eyebrow="Administration" title="System overview" />
+        <Panel>
+          <LoadingState label="Loading statistics…" />
+        </Panel>
+      </>
+    );
+  }
+
   if (stats.isError) {
-    return <ErrorState message={(stats.error as Error).message} onRetry={() => stats.refetch()} />;
+    return (
+      <>
+        <PageHeader eyebrow="Administration" title="System overview" />
+        <Panel>
+          <ErrorState
+            message={(stats.error as Error).message}
+            onRetry={() => stats.refetch()}
+          />
+        </Panel>
+      </>
+    );
   }
 
   const data = stats.data;
   if (!data) return null;
 
+  const requestTotal = data.priorityBreakdown.reduce((sum, entry) => sum + entry._count._all, 0);
+
   return (
     <>
-      <PageHeader eyebrow="Administration" title="System overview" description="Live figures across users, fleet and operations." />
+      <PageHeader
+        eyebrow="Administration"
+        title="System overview"
+        description="Live figures across users, fleet and operations."
+      />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total users" value={data.users.totalUsers} hint={`${data.users.totalPatients} patients`} tone="brand" />
+      <MetricGrid columns={4} className="mb-6">
         <StatCard
-          label="Available ambulances"
+          label="Total users"
+          value={data.users.totalUsers}
+          hint={`${data.users.totalPatients} patients · ${data.users.totalDispatchers} dispatchers`}
+          icon={<Users className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Ambulances available"
           value={`${data.fleet.availableAmbulances}/${data.fleet.totalAmbulances}`}
           hint={`${data.fleet.availableDrivers}/${data.fleet.totalDrivers} drivers free`}
-          tone="success"
+          icon={<Ambulance className="h-4 w-4" />}
         />
-        <StatCard label="Pending requests" value={data.operations.pendingRequests} tone="warning" />
-        <StatCard label="Active trips" value={data.operations.activeTrips} tone="critical" />
-      </div>
+        <StatCard
+          label="Pending requests"
+          value={data.operations.pendingRequests}
+          tone={data.operations.pendingRequests > 0 ? "warning" : "neutral"}
+          icon={<Siren className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Active trips"
+          value={data.operations.activeTrips}
+          icon={<Route className="h-4 w-4" />}
+        />
+      </MetricGrid>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Panel className="lg:col-span-2">
-          <PanelHeader title="Priority breakdown" description="Open and historical requests by urgency." />
-          {data.priorityBreakdown.length === 0 ? (
-            <EmptyState title="No requests recorded" icon={<Siren className="h-5 w-5" aria-hidden="true" />} />
+          <PanelHeader
+            title="Priority breakdown"
+            description="Requests by urgency."
+            actions={
+              <span className="text-xs tabular-nums text-ink-subtle">
+                {requestTotal} {requestTotal === 1 ? "request" : "requests"}
+              </span>
+            }
+          />
+          {requestTotal === 0 ? (
+            <EmptyState
+              title="No requests recorded"
+              description="Priority mix appears once requests come in."
+              icon={<Siren className="h-5 w-5" aria-hidden="true" />}
+            />
           ) : (
-            <ul className="space-y-3 p-5">
-              {data.priorityBreakdown.map((entry) => {
-                const total = data.priorityBreakdown.reduce((sum, e) => sum + e._count._all, 0) || 1;
-                const pct = Math.round((entry._count._all / total) * 100);
+            <ul className="space-y-4 p-5">
+              {PRIORITY_ORDER.map((priority) => {
+                const count =
+                  data.priorityBreakdown.find((entry) => entry.priority === priority)?._count._all ??
+                  0;
+                const share = requestTotal === 0 ? 0 : Math.round((count / requestTotal) * 100);
+
                 return (
-                  <li key={entry.priority}>
-                    <div className="mb-1 flex items-center justify-between text-sm">
-                      <StatusTag presentation={PRIORITY[entry.priority]} />
-                      <span className="font-medium tabular-nums text-ink-muted">{entry._count._all}</span>
+                  <li key={priority}>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <StatusTag presentation={PRIORITY[priority]} />
+                      <p className="text-[13px] tabular-nums text-ink-muted">
+                        {count}{" "}
+                        <span className="text-ink-subtle">
+                          · {share}% of requests
+                        </span>
+                      </p>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-surface-sunken">
-                      <div className="h-full rounded-full bg-brand-700" style={{ width: `${pct}%` }} />
-                    </div>
+                    <ProgressBar value={share} tone={PRIORITY[priority].tone} />
                   </li>
                 );
               })}
@@ -309,38 +521,41 @@ function AdminOverview() {
           )}
         </Panel>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           <Panel>
-            <PanelHeader title="Operations" />
-            <dl className="divide-y divide-line">
-              {[
-                ["Requests", data.operations.totalRequests, Siren],
-                ["Trips", data.operations.totalTrips, Route],
-                ["Completed", data.operations.completedTrips, Ambulance],
-                ["Hospitals", data.fleet.totalHospitals, Users],
-              ].map(([label, value, Icon]) => {
-                const RowIcon = Icon as typeof Siren;
-                return (
-                  <div key={String(label)} className="flex items-center justify-between gap-3 px-5 py-3">
-                    <dt className="flex items-center gap-2 text-sm text-ink-muted">
-                      <RowIcon className="h-4 w-4" aria-hidden="true" />
-                      {label as string}
-                    </dt>
-                    <dd className="text-sm font-semibold tabular-nums text-ink">{value as number}</dd>
-                  </div>
-                );
-              })}
-            </dl>
+            <PanelHeader title="Revenue" />
+            <div className="px-5 py-4">
+              <p className="text-2xl font-semibold tracking-tight tabular-nums text-ink">
+                {formatCurrency(data.revenue)}
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">Collected from completed payments</p>
+            </div>
           </Panel>
 
           <Panel>
-            <PanelHeader title="Revenue" />
-            <div className="flex items-center gap-3 px-5 py-5">
-              <CreditCard className="h-5 w-5 text-success" aria-hidden="true" />
-              <p className="text-2xl font-semibold tabular-nums text-ink">
-                ${data.revenue.toFixed(2)}
-              </p>
-            </div>
+            <PanelHeader title="Operations" />
+            <dl className="divide-y divide-line">
+              <KeyValue
+                label="Requests"
+                value={data.operations.totalRequests}
+                icon={<Siren className="h-4 w-4 text-ink-subtle" aria-hidden="true" />}
+              />
+              <KeyValue
+                label="Trips"
+                value={data.operations.totalTrips}
+                icon={<Route className="h-4 w-4 text-ink-subtle" aria-hidden="true" />}
+              />
+              <KeyValue
+                label="Completed"
+                value={data.operations.completedTrips}
+                icon={<Ambulance className="h-4 w-4 text-ink-subtle" aria-hidden="true" />}
+              />
+              <KeyValue
+                label="Hospitals"
+                value={data.fleet.totalHospitals}
+                icon={<Building2 className="h-4 w-4 text-ink-subtle" aria-hidden="true" />}
+              />
+            </dl>
           </Panel>
         </div>
       </div>

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Brand: Blue-indigo centered on #5B7CFA ─────────────────────────────── */
+  /* ── Brand: indigo — the only accent in the console ───────────────────────── */
   --color-brand-50:  #eef1ff;
   --color-brand-100: #e0e5ff;
   --color-brand-200: #c7cfff;
@@ -14,38 +14,40 @@
   --color-brand-900: #263882;
   --color-brand-950: #17214d;
 
-  /* ── Neutral surfaces ────────────────────────────────────────────────────── */
-  --color-canvas:          #f8f9fc;
+  /* ── Neutral surfaces (cool, low-chroma so brand indigo reads as the accent) ── */
+  --color-canvas:          #f7f8fa;
   --color-surface:         #ffffff;
-  --color-surface-sunken:  #f1f3f8;
+  --color-surface-sunken:  #f2f4f7;
   --color-surface-raised:  #ffffff;
-  --color-line:            #e4e7ef;
-  --color-line-strong:     #c9cedb;
+  --color-line:            #e6e8ec;
+  --color-line-strong:     #d5d9e0;
 
   /* ── Ink (text) ──────────────────────────────────────────────────────────── */
-  --color-ink:        #0f1523;
-  --color-ink-muted:  #4f5775;
-  --color-ink-subtle: #8891aa;
+  --color-ink:        #101828;
+  --color-ink-muted:  #5b6375;
+  --color-ink-subtle: #98a0b0;
   --color-ink-invert: #ffffff;
 
-  /* ── Semantic status ─────────────────────────────────────────────────────── */
-  --color-critical:      #dc2626;
-  --color-critical-soft: #fef2f2;
-  --color-high:          #d97706;
-  --color-high-soft:     #fffbeb;
-  --color-medium:        #2563eb;
-  --color-medium-soft:   #eff6ff;
-  --color-low:           #059669;
-  --color-low-soft:      #ecfdf5;
-  --color-success:       #16a34a;
-  --color-success-soft:  #f0fdf4;
-  --color-warning:       #d97706;
-  --color-warning-soft:  #fffbeb;
-  --color-neutral-soft:  #f1f3f8;
+  /* ── Semantic status — reserved for genuine alerts only ───────────────────── */
+  --color-critical:      #d92d20;
+  --color-critical-soft: #fef3f2;
+  --color-high:          #b54708;
+  --color-high-soft:     #fffaeb;
+  --color-medium:        #175cd3;
+  --color-medium-soft:   #eff8ff;
+  --color-low:           #027a48;
+  --color-low-soft:      #ecfdf3;
+  --color-success:       #067647;
+  --color-success-soft:  #ecfdf3;
+  --color-warning:       #b54708;
+  --color-warning-soft:  #fffaeb;
+  --color-neutral-soft:  #f2f4f7;
 
   /* ── Typography ──────────────────────────────────────────────────────────── */
   --font-sans:    var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  /* Serif is gone — display type is the same sans as body, differentiated by
+     size, weight and tracking rather than by family. */
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* ── Base resets ─────────────────────────────────────────────────────────────── */
@@ -63,17 +65,18 @@
     background-color: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   ::selection {
-    background-color: var(--color-brand-500);
+    background-color: var(--color-brand-600);
     color: #ffffff;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-brand-500);
+    outline: 2px solid var(--color-brand-600);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -83,17 +86,16 @@
 @utility panel {
   background-color: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: 1rem;
+  border-radius: 0.75rem;
 }
 
 @utility panel-raised {
   background-color: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   box-shadow:
-    0 1px 3px rgb(15 21 35 / 0.04),
-    0 4px 16px -4px rgb(15 21 35 / 0.08),
-    0 16px 40px -12px rgb(15 21 35 / 0.06);
+    0 1px 2px rgb(16 24 40 / 0.04),
+    0 1px 3px rgb(16 24 40 / 0.06);
 }
 
 @utility panel-glass {
@@ -101,7 +103,7 @@
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid rgb(255 255 255 / 0.6);
-  border-radius: 1rem;
+  border-radius: 0.75rem;
 }
 
 @utility hairline-top {
@@ -112,7 +114,17 @@
 @utility text-display {
   font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.022em;
+}
+
+/* Section eyebrows, stat labels and nav group titles. */
+@utility text-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-subtle);
 }
 
 @utility text-gradient {
@@ -136,6 +148,12 @@
 @keyframes slide-in-left {
   from { opacity: 0; transform: translateX(-12px); }
   to   { opacity: 1; transform: none; }
+}
+
+/* Tone-agnostic live indicator: opacity only, so it inherits the status colour. */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
 }
 
 @keyframes pulse-ring {
@@ -163,6 +181,10 @@
 
 @utility animate-alarm {
   animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@utility animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
 }
 
 /* ── Scrollbars ──────────────────────────────────────────────────────────────── */
