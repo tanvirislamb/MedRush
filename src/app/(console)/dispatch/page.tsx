@@ -63,14 +63,25 @@ function DispatchScreen() {
   });
 
   const dispatch = useMutation({
-    mutationFn: ({ requestId, ambulanceId, driverId }: { requestId: string; ambulanceId?: string; driverId?: string }) =>
-      tripService.dispatch(
-        requestId,
-        {
-          ...(ambulanceId ? { ambulanceId } : {}),
-          ...(driverId ? { driverId } : {}),
-        },
-      ),
+    mutationFn: ({
+      requestId,
+      ambulanceId,
+      driverId,
+      distanceKm,
+      fare,
+    }: {
+      requestId: string;
+      ambulanceId?: string;
+      driverId?: string;
+      distanceKm?: number;
+      fare?: number;
+    }) =>
+      tripService.dispatch(requestId, {
+        ...(ambulanceId ? { ambulanceId } : {}),
+        ...(driverId ? { driverId } : {}),
+        ...(distanceKm !== undefined && distanceKm > 0 ? { distanceKm } : {}),
+        ...(fare !== undefined && fare > 0 ? { fare } : {}),
+      }),
     onSuccess: async () => {
       notify({ title: "Crew dispatched", description: "The ambulance and driver are now assigned.", tone: "success" });
       setOpenDispatch(null);
@@ -226,8 +237,8 @@ function DispatchScreen() {
                           isLoadingCrew={ambulances.isLoading || drivers.isLoading}
                           isSubmitting={dispatch.isPending}
                           onCancel={() => setOpenDispatch(null)}
-                          onSubmit={(ambulanceId, driverId) =>
-                            dispatch.mutate({ requestId: request.id, ambulanceId, driverId })
+                          onSubmit={(ambulanceId, driverId, distanceKm, fare) =>
+                            dispatch.mutate({ requestId: request.id, ambulanceId, driverId, distanceKm, fare })
                           }
                         />
                       ) : null}
@@ -262,10 +273,12 @@ function DispatchForm({
   isLoadingCrew: boolean;
   isSubmitting: boolean;
   onCancel: () => void;
-  onSubmit: (ambulanceId?: string, driverId?: string) => void;
+  onSubmit: (ambulanceId?: string, driverId?: string, distanceKm?: number, fare?: number) => void;
 }) {
   const [ambulanceId, setAmbulanceId] = useState("");
   const [driverId, setDriverId] = useState("");
+  const [distanceKm, setDistanceKm] = useState("");
+  const [fare, setFare] = useState("");
 
   if (isLoadingCrew) {
     return (
@@ -278,7 +291,7 @@ function DispatchForm({
   const noCrew = ambulances.length === 0 || drivers.length === 0;
 
   return (
-    <div className="mt-3 w-80 space-y-3 rounded-lg border border-line bg-surface-sunken p-4 text-left">
+    <div className="mt-3 w-96 space-y-3 rounded-lg border border-line bg-surface-sunken p-4 text-left">
       {noCrew ? (
         <FormBanner>
           {ambulances.length === 0 && drivers.length === 0
@@ -319,13 +332,52 @@ function DispatchForm({
         ))}
       </Select>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor="distanceKm" className="block text-sm font-medium text-ink">
+            Distance (km)
+          </label>
+          <input
+            id="distanceKm"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="e.g. 5.2"
+            value={distanceKm}
+            onChange={(e) => setDistanceKm(e.target.value)}
+            className="mt-1.5 h-9 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-subtle focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          />
+        </div>
+        <div>
+          <label htmlFor="fare" className="block text-sm font-medium text-ink">
+            Fare (৳)
+          </label>
+          <input
+            id="fare"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="e.g. 1200"
+            value={fare}
+            onChange={(e) => setFare(e.target.value)}
+            className="mt-1.5 h-9 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-subtle focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          />
+        </div>
+      </div>
+
       <div className="flex items-center gap-2">
         <Button
           size="sm"
           isLoading={isSubmitting}
           disabled={noCrew}
-          // Both fields blank is valid: the backend auto-assigns the first available crew.
-          onClick={() => onSubmit(ambulanceId || undefined, driverId || undefined)}
+          onClick={() =>
+            onSubmit(
+              ambulanceId || undefined,
+              driverId || undefined,
+              distanceKm ? parseFloat(distanceKm) : undefined,
+              fare ? parseFloat(fare) : undefined,
+            )
+          }
         >
           Send
         </Button>
