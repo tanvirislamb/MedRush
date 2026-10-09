@@ -161,7 +161,7 @@ export default function TripDetailPage() {
                     key={next}
                     variant={next === "CANCELLED" ? "danger" : "primary"}
                     size="sm"
-                    isLoading={setStatus.isPending}
+                    isLoading={setStatus.isPending && setStatus.variables === next}
                     onClick={() => setStatus.mutate(next)}
                   >
                     Mark {TRIP_STATUS[next].label.toLowerCase()}
@@ -218,12 +218,14 @@ export default function TripDetailPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusTag presentation={PAYMENT_STATUS[data.payment.status]} />
-                  <Link
-                    href="/payments"
-                    className="text-sm font-semibold text-brand-700 hover:underline"
-                  >
-                    View
-                  </Link>
+                  {role === "PATIENT" ? (
+                    <Link
+                      href="/payments"
+                      className="text-sm font-semibold text-brand-700 hover:underline"
+                    >
+                      View
+                    </Link>
+                  ) : null}
                 </div>
               </div>
             ) : (

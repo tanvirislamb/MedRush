@@ -104,8 +104,9 @@ function PaymentsScreen() {
                   </span>
                   <Button
                     size="sm"
-                    isLoading={checkout.isPending}
+                    isLoading={checkout.isPending && checkout.variables === trip.id}
                     icon={<CreditCard className="h-3.5 w-3.5" aria-hidden="true" />}
+                    disabled={checkout.isPending}
                     onClick={() => checkout.mutate(trip.id)}
                   >
                     Pay
@@ -176,7 +177,7 @@ function PaymentsScreen() {
 
 export default function PaymentsPage() {
   return (
-    <RequireRole allow={["PATIENT", "ADMIN"]}>
+    <RequireRole allow={["PATIENT"]}>
       <PaymentsScreen />
     </RequireRole>
   );

@@ -277,7 +277,7 @@ function RequestsScreen() {
                           variant="ghost"
                           size="sm"
                           icon={<X className="h-3.5 w-3.5" aria-hidden="true" />}
-                          isLoading={cancel.isPending}
+                          isLoading={cancel.isPending && cancel.variables === request.id}
                           onClick={() => cancel.mutate(request.id)}
                         >
                           Cancel

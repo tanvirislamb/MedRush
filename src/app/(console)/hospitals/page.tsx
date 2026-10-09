@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Plus, Search, Trash2 } from "lucide-react";
+import { Building2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "@/Components/Button";
@@ -14,6 +14,7 @@ import { usePagination } from "@/Hooks/usePagination";
 import { useToast } from "@/Hooks/useToast";
 import { hospitalService } from "@/Services/hospitalService";
 import { ApiError } from "@/Services/httpClient";
+import type { HospitalWithUsage } from "@/Types/domain";
 
 function HospitalsScreen() {
   const queryClient = useQueryClient();
@@ -22,6 +23,7 @@ function HospitalsScreen() {
 
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -42,17 +44,43 @@ function HospitalsScreen() {
     applyMeta(hospitals.data?.meta);
   }, [hospitals.data?.meta, applyMeta]);
 
+  const resetForm = () => {
+    setEditingId(null);
+    setName("");
+    setAddress("");
+    setContact("");
+    setServices("");
+    setFormError(null);
+    setFieldErrors({});
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (hospital: HospitalWithUsage) => {
+    setEditingId(hospital.id);
+    setName(hospital.name);
+    setAddress(hospital.address);
+    setContact(hospital.contact);
+    setServices(hospital.services ?? "");
+    setFormError(null);
+    setFieldErrors({});
+    setIsFormOpen(true);
+  };
+
+  const closeForm = () => {
+    resetForm();
+    setIsFormOpen(false);
+  };
+
   const create = useMutation({
     mutationFn: hospitalService.create,
     onSuccess: async () => {
       notify({ title: "Hospital added", tone: "success" });
       setIsFormOpen(false);
-      setName("");
-      setAddress("");
-      setContact("");
-      setServices("");
-      setFormError(null);
-      setFieldErrors({});
+      resetForm();
       setPage(1);
       await queryClient.invalidateQueries({ queryKey: ["hospitals"] });
     },
@@ -61,6 +89,22 @@ function HospitalsScreen() {
         setFormError(error.message);
         setFieldErrors(error.fieldErrors);
       } else setFormError("Could not add the hospital.");
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof hospitalService.update>[1] }) =>
+      hospitalService.update(id, body),
+    onSuccess: async () => {
+      notify({ title: "Hospital updated", tone: "success" });
+      closeForm();
+      await queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+    },
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        setFormError(error.message);
+        setFieldErrors(error.fieldErrors);
+      } else setFormError("Could not update the hospital.");
     },
   });
 
@@ -82,12 +126,20 @@ function HospitalsScreen() {
     event.preventDefault();
     setFormError(null);
     setFieldErrors({});
-    create.mutate({
+    const body = {
       name: name.trim(),
       address: address.trim(),
       contact: contact.trim(),
-      ...(services.trim() ? { services: services.trim() } : {}),
-    });
+      services: services.trim(),
+    };
+    if (editingId) update.mutate({ id: editingId, body });
+    else
+      create.mutate({
+        name: body.name,
+        address: body.address,
+        contact: body.contact,
+        ...(body.services ? { services: body.services } : {}),
+      });
   }
 
   const rows = hospitals.data?.data ?? [];
@@ -100,7 +152,7 @@ function HospitalsScreen() {
         description="Hospitals that trips can be routed to on arrival."
         actions={
           <Button
-            onClick={() => setIsFormOpen((open) => !open)}
+            onClick={() => (isFormOpen ? closeForm() : openCreateForm())}
             icon={<Plus className="h-4 w-4" aria-hidden="true" />}
           >
             {isFormOpen ? "Close form" : "Add hospital"}
@@ -110,7 +162,9 @@ function HospitalsScreen() {
 
       {isFormOpen ? (
         <Panel raised className="mb-6 p-5">
-          <h2 className="mb-4 text-base font-semibold text-ink">Add a hospital</h2>
+          <h2 className="mb-4 text-base font-semibold text-ink">
+            {editingId ? "Edit hospital" : "Add a hospital"}
+          </h2>
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             {formError ? <FormBanner>{formError}</FormBanner> : null}
             <div className="grid gap-4 sm:grid-cols-3">
@@ -151,9 +205,16 @@ function HospitalsScreen() {
               onChange={(e) => setServices(e.target.value)}
               error={fieldErrors.services}
             />
-            <Button type="submit" isLoading={create.isPending}>
-              Add hospital
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="submit" isLoading={create.isPending || update.isPending}>
+                {editingId ? "Save changes" : "Add hospital"}
+              </Button>
+              {editingId ? (
+                <Button type="button" variant="ghost" onClick={closeForm}>
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
           </form>
         </Panel>
       ) : null}
@@ -221,15 +282,24 @@ function HospitalsScreen() {
                       {hospital.deletedAt ? (
                         <span className="text-xs text-ink-subtle">—</span>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`Remove ${hospital.name}`}
-                          isLoading={retire.isPending}
-                          onClick={() => retire.mutate(hospital.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Edit ${hospital.name}`}
+                            icon={<Pencil className="h-3.5 w-3.5" aria-hidden="true" />}
+                            onClick={() => openEditForm(hospital)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Remove ${hospital.name}`}
+                            isLoading={retire.isPending && retire.variables === hospital.id}
+                            onClick={() => retire.mutate(hospital.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          </Button>
+                        </div>
                       )}
                     </Td>
                   </tr>

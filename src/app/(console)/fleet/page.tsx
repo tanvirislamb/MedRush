@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ambulance, Plus, Trash2 } from "lucide-react";
+import { Ambulance, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "@/Components/Button";
@@ -15,7 +15,7 @@ import { useToast } from "@/Hooks/useToast";
 import { fleetService } from "@/Services/fleetService";
 import { ApiError } from "@/Services/httpClient";
 import { AVAILABILITY } from "@/Utils/presentation";
-import type { Availability } from "@/Types/domain";
+import type { AmbulanceWithUsage, Availability } from "@/Types/domain";
 
 const AVAILABILITY_OPTIONS: Availability[] = ["AVAILABLE", "BUSY", "OFFLINE"];
 
@@ -26,6 +26,7 @@ function FleetScreen() {
 
   const [availability, setAvailability] = useState<Availability | "ALL">("ALL");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [type, setType] = useState("BASIC");
@@ -43,15 +44,43 @@ function FleetScreen() {
     applyMeta(fleet.data?.meta);
   }, [fleet.data?.meta, applyMeta]);
 
+  const resetForm = () => {
+    setEditingId(null);
+    setVehicleNumber("");
+    setType("BASIC");
+    setCapacity("2");
+    setStationZone("");
+    setFormError(null);
+    setFieldErrors({});
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (ambulance: AmbulanceWithUsage) => {
+    setEditingId(ambulance.id);
+    setVehicleNumber(ambulance.vehicleNumber);
+    setType(ambulance.type);
+    setCapacity(String(ambulance.capacity));
+    setStationZone(ambulance.stationZone);
+    setFormError(null);
+    setFieldErrors({});
+    setIsFormOpen(true);
+  };
+
+  const closeForm = () => {
+    resetForm();
+    setIsFormOpen(false);
+  };
+
   const create = useMutation({
     mutationFn: fleetService.create,
     onSuccess: async () => {
       notify({ title: "Ambulance registered", tone: "success" });
       setIsFormOpen(false);
-      setVehicleNumber("");
-      setStationZone("");
-      setFormError(null);
-      setFieldErrors({});
+      resetForm();
       setPage(1);
       await queryClient.invalidateQueries({ queryKey: ["fleet"] });
     },
@@ -60,6 +89,22 @@ function FleetScreen() {
         setFormError(error.message);
         setFieldErrors(error.fieldErrors);
       } else setFormError("Could not register the ambulance.");
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof fleetService.update>[1] }) =>
+      fleetService.update(id, body),
+    onSuccess: async () => {
+      notify({ title: "Ambulance updated", tone: "success" });
+      closeForm();
+      await queryClient.invalidateQueries({ queryKey: ["fleet"] });
+    },
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        setFormError(error.message);
+        setFieldErrors(error.fieldErrors);
+      } else setFormError("Could not update the ambulance.");
     },
   });
 
@@ -95,6 +140,17 @@ function FleetScreen() {
     event.preventDefault();
     setFormError(null);
     setFieldErrors({});
+    if (editingId) {
+      update.mutate({
+        id: editingId,
+        body: {
+          type,
+          capacity: Number(capacity) || 2,
+          stationZone: stationZone.trim(),
+        },
+      });
+      return;
+    }
     create.mutate({
       vehicleNumber: vehicleNumber.trim().toUpperCase(),
       type,
@@ -113,7 +169,7 @@ function FleetScreen() {
         description="Register vehicles and control whether they can be dispatched."
         actions={
           <Button
-            onClick={() => setIsFormOpen((open) => !open)}
+            onClick={() => (isFormOpen ? closeForm() : openCreateForm())}
             icon={<Plus className="h-4 w-4" aria-hidden="true" />}
           >
             {isFormOpen ? "Close form" : "Add ambulance"}
@@ -123,7 +179,9 @@ function FleetScreen() {
 
       {isFormOpen ? (
         <Panel raised className="mb-6 p-5">
-          <h2 className="mb-4 text-base font-semibold text-ink">Register an ambulance</h2>
+          <h2 className="mb-4 text-base font-semibold text-ink">
+            {editingId ? "Edit ambulance" : "Register an ambulance"}
+          </h2>
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             {formError ? <FormBanner>{formError}</FormBanner> : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -133,7 +191,9 @@ function FleetScreen() {
                 placeholder="AMB-101"
                 required
                 value={vehicleNumber}
+                disabled={Boolean(editingId)}
                 onChange={(e) => setVehicleNumber(e.target.value)}
+                hint={editingId ? "Vehicle numbers can't be changed." : undefined}
                 error={fieldErrors.vehicleNumber}
               />
               <Select label="Type" name="type" value={type} onChange={(e) => setType(e.target.value)}>
@@ -163,9 +223,16 @@ function FleetScreen() {
                 error={fieldErrors.stationZone}
               />
             </div>
-            <Button type="submit" isLoading={create.isPending}>
-              Register ambulance
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="submit" isLoading={create.isPending || update.isPending}>
+                {editingId ? "Save changes" : "Register ambulance"}
+              </Button>
+              {editingId ? (
+                <Button type="button" variant="ghost" onClick={closeForm}>
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
           </form>
         </Panel>
       ) : null}
@@ -248,12 +315,22 @@ function FleetScreen() {
                         <span className="text-xs text-ink-subtle">—</span>
                       ) : (
                         <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Edit ${ambulance.vehicleNumber}`}
+                            icon={<Pencil className="h-3.5 w-3.5" aria-hidden="true" />}
+                            onClick={() => openEditForm(ambulance)}
+                          />
                           <Select
                             aria-label={`Set availability for ${ambulance.vehicleNumber}`}
                             name={`availability-${ambulance.id}`}
                             value={ambulance.availability}
                             className="h-8 w-32"
-                            disabled={setAvailabilityMutation.isPending}
+                            disabled={
+                              setAvailabilityMutation.isPending &&
+                              setAvailabilityMutation.variables?.id === ambulance.id
+                            }
                             onChange={(e) =>
                               setAvailabilityMutation.mutate({
                                 id: ambulance.id,
@@ -271,7 +348,7 @@ function FleetScreen() {
                             variant="ghost"
                             size="sm"
                             aria-label={`Retire ${ambulance.vehicleNumber}`}
-                            isLoading={retire.isPending}
+                            isLoading={retire.isPending && retire.variables === ambulance.id}
                             onClick={() => retire.mutate(ambulance.id)}
                           >
                             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />

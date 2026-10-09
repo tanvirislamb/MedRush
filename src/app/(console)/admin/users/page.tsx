@@ -196,7 +196,10 @@ function UsersScreen() {
                           <select
                             aria-label={`Change role for ${user.name}`}
                             value={user.role}
-                            disabled={setRoleMutation.isPending}
+                            disabled={
+                              setRoleMutation.isPending &&
+                              setRoleMutation.variables?.id === user.id
+                            }
                             onChange={(e) =>
                               setRoleMutation.mutate({ id: user.id, next: e.target.value as Role })
                             }
@@ -217,7 +220,10 @@ function UsersScreen() {
                           <select
                             aria-label={`Change status for ${user.name}`}
                             value={user.status}
-                            disabled={setStatusMutation.isPending}
+                            disabled={
+                              setStatusMutation.isPending &&
+                              setStatusMutation.variables?.id === user.id
+                            }
                             onChange={(e) =>
                               setStatusMutation.mutate({
                                 id: user.id,

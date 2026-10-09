@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Users } from "lucide-react";
+import { Pencil, Plus, Search, Users } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "@/Components/Button";
@@ -18,7 +18,7 @@ import { administrationService } from "@/Services/administrationService";
 import { ApiError } from "@/Services/httpClient";
 import { useSession } from "@/Hooks/useSession";
 import { AVAILABILITY } from "@/Utils/presentation";
-import type { Availability } from "@/Types/domain";
+import type { Availability, DriverWithAccount } from "@/Types/domain";
 
 const AVAILABILITY_OPTIONS: Availability[] = ["AVAILABLE", "BUSY", "OFFLINE"];
 
@@ -31,6 +31,7 @@ function CrewScreen() {
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState<Availability | "ALL">("ALL");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [userId, setUserId] = useState("");
   const [name, setName] = useState("");
@@ -65,17 +66,42 @@ function CrewScreen() {
     applyMeta(crew.data?.meta);
   }, [crew.data?.meta, applyMeta]);
 
+  const resetForm = () => {
+    setEditingId(null);
+    setUserId("");
+    setName("");
+    setPhone("");
+    setLicenseNo("");
+    setFormError(null);
+    setFieldErrors({});
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (driver: DriverWithAccount) => {
+    setEditingId(driver.id);
+    setName(driver.name);
+    setPhone(driver.phone);
+    setLicenseNo(driver.licenseNo);
+    setFormError(null);
+    setFieldErrors({});
+    setIsFormOpen(true);
+  };
+
+  const closeForm = () => {
+    resetForm();
+    setIsFormOpen(false);
+  };
+
   const create = useMutation({
     mutationFn: crewService.create,
     onSuccess: async () => {
       notify({ title: "Driver profile created", tone: "success" });
       setIsFormOpen(false);
-      setUserId("");
-      setName("");
-      setPhone("");
-      setLicenseNo("");
-      setFormError(null);
-      setFieldErrors({});
+      resetForm();
       setPage(1);
       await queryClient.invalidateQueries({ queryKey: ["crew"] });
     },
@@ -84,6 +110,22 @@ function CrewScreen() {
         setFormError(error.message);
         setFieldErrors(error.fieldErrors);
       } else setFormError("Could not create the driver profile.");
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof crewService.update>[1] }) =>
+      crewService.update(id, body),
+    onSuccess: async () => {
+      notify({ title: "Driver profile updated", tone: "success" });
+      closeForm();
+      await queryClient.invalidateQueries({ queryKey: ["crew"] });
+    },
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        setFormError(error.message);
+        setFieldErrors(error.fieldErrors);
+      } else setFormError("Could not update the driver profile.");
     },
   });
 
@@ -105,6 +147,17 @@ function CrewScreen() {
     event.preventDefault();
     setFormError(null);
     setFieldErrors({});
+    if (editingId) {
+      update.mutate({
+        id: editingId,
+        body: {
+          name: name.trim(),
+          phone: phone.trim(),
+          licenseNo: licenseNo.trim(),
+        },
+      });
+      return;
+    }
     create.mutate({
       userId,
       name: name.trim(),
@@ -123,7 +176,7 @@ function CrewScreen() {
         description="Driver profiles, their linked accounts and current availability."
         actions={
           <Button
-            onClick={() => setIsFormOpen((open) => !open)}
+            onClick={() => (isFormOpen ? closeForm() : openCreateForm())}
             icon={<Plus className="h-4 w-4" aria-hidden="true" />}
           >
             {isFormOpen ? "Close form" : "Add driver"}
@@ -133,11 +186,17 @@ function CrewScreen() {
 
       {isFormOpen ? (
         <Panel raised className="mb-6 p-5">
-          <h2 className="mb-4 text-base font-semibold text-ink">Create a driver profile</h2>
+          <h2 className="mb-4 text-base font-semibold text-ink">
+            {editingId ? "Edit driver profile" : "Create a driver profile"}
+          </h2>
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             {formError ? <FormBanner>{formError}</FormBanner> : null}
 
-            {isAdmin ? (
+            {editingId ? (
+              <FormBanner tone="info">
+                The linked account can&apos;t be changed; only the profile details below.
+              </FormBanner>
+            ) : isAdmin ? (
               <Select
                 label="Linked account"
                 name="userId"
@@ -198,9 +257,16 @@ function CrewScreen() {
               />
             </div>
 
-            <Button type="submit" isLoading={create.isPending} disabled={!isAdmin}>
-              Create profile
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="submit" isLoading={create.isPending || update.isPending} disabled={!editingId && !isAdmin}>
+                {editingId ? "Save changes" : "Create profile"}
+              </Button>
+              {editingId ? (
+                <Button type="button" variant="ghost" onClick={closeForm}>
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
           </form>
         </Panel>
       ) : null}
@@ -266,7 +332,7 @@ function CrewScreen() {
                   <Th>Licence</Th>
                   <Th>Account</Th>
                   <Th>Availability</Th>
-                  <Th className="text-right">Set status</Th>
+                  <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -280,25 +346,37 @@ function CrewScreen() {
                       <StatusTag presentation={AVAILABILITY[driver.availability]} />
                     </Td>
                     <Td className="text-right">
-                      <Select
-                        aria-label={`Set availability for ${driver.name}`}
-                        name={`driver-availability-${driver.id}`}
-                        value={driver.availability}
-                        className="ml-auto h-8 w-32"
-                        disabled={setAvailabilityMutation.isPending}
-                        onChange={(e) =>
-                          setAvailabilityMutation.mutate({
-                            id: driver.id,
-                            next: e.target.value as Availability,
-                          })
-                        }
-                      >
-                        {AVAILABILITY_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {AVAILABILITY[option].label}
-                          </option>
-                        ))}
-                      </Select>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Edit ${driver.name}`}
+                          icon={<Pencil className="h-3.5 w-3.5" aria-hidden="true" />}
+                          onClick={() => openEditForm(driver)}
+                        />
+                        <Select
+                          aria-label={`Set availability for ${driver.name}`}
+                          name={`driver-availability-${driver.id}`}
+                          value={driver.availability}
+                          className="ml-auto h-8 w-32"
+                          disabled={
+                            setAvailabilityMutation.isPending &&
+                            setAvailabilityMutation.variables?.id === driver.id
+                          }
+                          onChange={(e) =>
+                            setAvailabilityMutation.mutate({
+                              id: driver.id,
+                              next: e.target.value as Availability,
+                            })
+                          }
+                        >
+                          {AVAILABILITY_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {AVAILABILITY[option].label}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
                     </Td>
                   </tr>
                 ))}

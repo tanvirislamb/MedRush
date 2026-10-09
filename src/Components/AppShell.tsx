@@ -104,7 +104,7 @@ const NAV_GROUPS: NavGroup[] = [
         href: "/payments",
         label: "Payments",
         icon: <CreditCard className="h-4 w-4" aria-hidden="true" />,
-        roles: ["PATIENT", "ADMIN"],
+        roles: ["PATIENT"],
       },
     ],
   },
