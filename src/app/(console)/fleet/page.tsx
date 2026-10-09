@@ -238,14 +238,17 @@ function FleetScreen() {
       ) : null}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        {AVAILABILITY_OPTIONS.map((option) => (
-          <StatCard
-            key={option}
-            label={AVAILABILITY[option].label}
-            value={option === availability ? (fleet.data?.meta.total ?? 0) : "—"}
-            tone={option === "AVAILABLE" ? "success" : option === "BUSY" ? "warning" : "neutral"}
-          />
-        ))}
+        {AVAILABILITY_OPTIONS.map((option) => {
+          const total = fleet.data?.data?.filter((a) => a.availability === option).length ?? 0;
+          return (
+            <StatCard
+              key={option}
+              label={AVAILABILITY[option].label}
+              value={String(total)}
+              tone={option === "AVAILABLE" ? "success" : option === "BUSY" ? "warning" : "neutral"}
+            />
+          );
+        })}
       </div>
 
       <Panel>
