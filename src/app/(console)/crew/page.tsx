@@ -14,9 +14,7 @@ import { useDebouncedValue } from "@/Hooks/useDebouncedValue";
 import { usePagination } from "@/Hooks/usePagination";
 import { useToast } from "@/Hooks/useToast";
 import { crewService } from "@/Services/crewService";
-import { administrationService } from "@/Services/administrationService";
 import { ApiError } from "@/Services/httpClient";
-import { useSession } from "@/Hooks/useSession";
 import { AVAILABILITY } from "@/Utils/presentation";
 import type { Availability, DriverWithAccount } from "@/Types/domain";
 
@@ -25,7 +23,6 @@ const AVAILABILITY_OPTIONS: Availability[] = ["AVAILABLE", "BUSY", "OFFLINE"];
 function CrewScreen() {
   const queryClient = useQueryClient();
   const { notify } = useToast();
-  const { role } = useSession();
   const { page, limit, meta, applyMeta, setPage } = usePagination();
 
   const [search, setSearch] = useState("");
@@ -53,13 +50,13 @@ function CrewScreen() {
       }),
   });
 
-  // A driver profile must hang off an existing account, so admins need the user list
-  // to pick from. Dispatchers do not have /admin/users access.
-  const isAdmin = role === "ADMIN";
+  // A driver profile must hang off an existing account, so the form lets anyone
+  // with crew access (dispatchers included) pick who to link. The backend keeps
+  // this endpoint open to dispatcher + admin.
   const users = useQuery({
-    queryKey: ["admin", "users", "for-driver"],
-    queryFn: () => administrationService.listUsers({ limit: 100 }),
-    enabled: isAdmin && isFormOpen,
+    queryKey: ["crew", "eligible-users"],
+    queryFn: () => crewService.eligibleUsers({ limit: 100 }),
+    enabled: isFormOpen,
   });
 
   useEffect(() => {
@@ -196,7 +193,7 @@ function CrewScreen() {
               <FormBanner tone="info">
                 The linked account can&apos;t be changed; only the profile details below.
               </FormBanner>
-            ) : isAdmin ? (
+            ) : (
               <Select
                 label="Linked account"
                 name="userId"
@@ -219,11 +216,6 @@ function CrewScreen() {
                     </option>
                   ))}
               </Select>
-            ) : (
-              <FormBanner tone="info">
-                Only administrators can attach a driver profile to a user account. Ask an admin to
-                create the profile for you.
-              </FormBanner>
             )}
 
             <div className="grid gap-4 sm:grid-cols-3">
@@ -258,7 +250,7 @@ function CrewScreen() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button type="submit" isLoading={create.isPending || update.isPending} disabled={!editingId && !isAdmin}>
+              <Button type="submit" isLoading={create.isPending || update.isPending}>
                 {editingId ? "Save changes" : "Create profile"}
               </Button>
               {editingId ? (

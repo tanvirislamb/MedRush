@@ -1,6 +1,6 @@
 import { api } from "./httpClient";
 import type { Paged } from "@/Types/api";
-import type { Availability, DriverWithAccount } from "@/Types/domain";
+import type { Availability, DriverWithAccount, User } from "@/Types/domain";
 
 export interface NewDriverProfile {
   /** A userId must be promoted to a driver profile first. */
@@ -32,4 +32,11 @@ export const crewService = {
 
   setAvailability: (id: string, availability: Availability) =>
     api.patch<DriverWithAccount>(`/drivers/${id}/availability`, { availability }),
+
+  /**
+   * User accounts that can still be linked to a driver profile (no existing
+   * driver). Open to dispatchers too, unlike /admin/users.
+   */
+  eligibleUsers: (params: { page?: number; limit?: number; search?: string } = {}) =>
+    api.get<Paged<User>>("/drivers/eligible-users", params),
 };
